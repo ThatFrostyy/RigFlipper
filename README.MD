@@ -26,6 +26,11 @@ RigFlipper is a sleek, local-first web application designed to help hardware fli
    ```bash
    npm run dev
 
+## 📸 Screenshots
+| Workshop | Global Market |
+|:---:|:---:|
+| ![App](https://cdn.discordapp.com/attachments/1429192095729586179/1466853902786756812/image.png?ex=697e41a7&is=697cf027&hm=c372de47e1806d0681a352ad1b306acedf20a7f17719c92595843557e4644616&) |
+
 ## 🤝 Contributing
 Found a bug?
 1.  Fork the Project
