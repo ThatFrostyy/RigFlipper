@@ -22,3 +22,17 @@ RigFlipper is a sleek, local-first web application designed to help hardware fli
 2. Install dependencies:
    ```bash
    npm install
+3. Start the development server:
+   ```bash
+   npm run dev
+
+## 🤝 Contributing
+Found a bug?
+1.  Fork the Project
+2.  Create your Feature Branch (`git checkout -b feature`)
+3.  Commit your Changes (`git commit -m 'Better sorting'`)
+4.  Push to the Branch (`git push origin feature`)
+5.  Open a Pull Request
+
+## 📜 License
+Distributed under the MIT License. See `LICENSE` for more information.
