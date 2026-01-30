@@ -2,19 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Optional: Dark mode background default */
 body {
   @apply bg-zinc-950 text-zinc-100;
 }
 
-/* Firefox Support */
 * {
   scrollbar-width: thin;
   scrollbar-color: #3f3f46 #09090b;
 }
 
-/* Custom Scrollbar for that "Cyberpunk" feel */
-/* Handles both vertical (width) and horizontal (height) */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -31,7 +27,6 @@ body {
   background-color: #3b82f6;
 }
 
-/* Dropdown Styling */
 select {
   background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2394a3b8' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
   background-position: right 0.5rem center;

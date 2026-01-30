@@ -1,24 +1,35 @@
 import { useState, useEffect } from 'react';
-import { getParts, addPart, deletePart, updatePart } from './lib/storage';
+import { getParts, addPart, deletePart, updatePart, importData } from './lib/storage';
+
+const TYPE_ICONS = {
+  'GPU': (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12h20"/><path d="M6 12v-4a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v4"/><path d="M6 12v4a4 4 0 0 0 4 4h4a4 4 0 0 0 4-4v-4"/><path d="M9 16h6"/></svg>,
+  'CPU': (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3"/><path d="M15 1v3"/><path d="M9 20v3"/><path d="M15 20v3"/><path d="M20 9h3"/><path d="M20 14h3"/><path d="M1 9h3"/><path d="M1 14h3"/></svg>,
+  'Motherboard': (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M6 18h12"/></svg>,
+  'RAM': (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12h20"/><path d="M2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6"/><path d="M2 12V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v6"/><path d="M6 15v3"/><path d="M10 15v3"/><path d="M14 15v3"/><path d="M18 15v3"/></svg>,
+  'PSU': (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 12h.01"/><path d="M10 12h.01"/><path d="M18 12h-2"/></svg>,
+  'Case': (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M12 2v20"/><path d="M16 6h2"/><path d="M16 10h2"/></svg>,
+  'Other': (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+};
 
 export default function App() {
   const [parts, setParts] = useState([]);
   const [formData, setFormData] = useState({ name: '', type: 'GPU', price: '', notes: '' });
   const [editingId, setEditingId] = useState(null);
-  const [filter, setFilter] = useState('all'); // 'all', 'available', 'sold'
-  const [sellModal, setSellModal] = useState(null); // ID of item being sold
+  const [filter, setFilter] = useState('all');
+  const [search, setSearch] = useState('');
+  const [sort, setSort] = useState('newest');
+  const [selectedPart, setSelectedPart] = useState(null);
+  const [isSelling, setIsSelling] = useState(false);
   const [sellPrice, setSellPrice] = useState('');
 
   useEffect(() => {
     const loadData = () => setParts(getParts());
     loadData();
     
-    // Listen for storage events to sync stats across tabs immediately
     window.addEventListener('storage', loadData);
     return () => window.removeEventListener('storage', loadData);
   }, []);
 
-  // Stats Calculation
   const stats = parts.reduce((acc, part) => {
     if (part.status === 'sold') {
       acc.revenue += part.soldPrice || 0;
@@ -50,7 +61,7 @@ export default function App() {
         type: formData.type,
         price: parseFloat(formData.price),
         notes: formData.notes,
-        status: 'available', // Default status
+        status: 'available',
         soldPrice: null,
         dateSold: null
       });
@@ -68,6 +79,7 @@ export default function App() {
       notes: part.notes || ''
     });
     setEditingId(part.id);
+    setSelectedPart(null);
   };
 
   const cancelEdit = () => {
@@ -89,18 +101,45 @@ export default function App() {
     document.body.removeChild(link);
   };
 
+  const exportJSON = () => {
+    const dataStr = JSON.stringify(parts, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+    const link = document.createElement("a");
+    link.setAttribute("href", dataUri);
+    link.setAttribute("download", "rigflipper_backup.json");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleImport = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = JSON.parse(event.target.result);
+        if (Array.isArray(data) && confirm('Overwrite inventory with backup?')) {
+          setParts(importData(data));
+        }
+      } catch (err) { alert('Invalid file'); }
+    };
+    reader.readAsText(file);
+  };
+
   const handleSell = (e) => {
     e.preventDefault();
-    if (!sellPrice) return;
+    if (!sellPrice || !selectedPart) return;
 
-    const updated = updatePart(sellModal, {
+    const updated = updatePart(selectedPart.id, {
       status: 'sold',
       soldPrice: parseFloat(sellPrice),
       dateSold: new Date().toISOString()
     });
 
     setParts(updated);
-    setSellModal(null);
+    setSelectedPart(null);
+    setIsSelling(false);
     setSellPrice('');
   };
 
@@ -108,14 +147,22 @@ export default function App() {
     if (confirm('Are you sure you want to delete this record?')) {
       const updated = deletePart(id);
       setParts(updated);
+      setSelectedPart(null);
     }
   };
 
-  const filteredParts = parts.filter(p => {
-    if (filter === 'available') return p.status !== 'sold';
-    if (filter === 'sold') return p.status === 'sold';
-    return true;
-  });
+  const filteredParts = parts
+    .filter(p => {
+      if (filter === 'available' && p.status === 'sold') return false;
+      if (filter === 'sold' && p.status !== 'sold') return false;
+      return p.name.toLowerCase().includes(search.toLowerCase());
+    })
+    .sort((a, b) => {
+      if (sort === 'oldest') return new Date(a.dateAdded) - new Date(b.dateAdded);
+      if (sort === 'price-high') return b.price - a.price;
+      if (sort === 'price-low') return a.price - b.price;
+      return new Date(b.dateAdded) - new Date(a.dateAdded);
+    });
 
   return (
     <div className="min-h-screen bg-surface-dark text-slate-400 font-sans selection:bg-accent-primary selection:text-white">
@@ -127,7 +174,13 @@ export default function App() {
             <h1 className="text-xl font-bold tracking-tight text-white">RigFlipper</h1>
           </div>
           <div className="flex gap-6 text-sm font-medium">
-            <button onClick={exportCSV} className="text-slate-500 hover:text-white transition-colors text-xs uppercase font-bold tracking-wider self-center">Export CSV</button>
+            <div className="flex gap-4 self-center">
+              <button onClick={exportCSV} className="text-slate-500 hover:text-white transition-colors text-xs uppercase font-bold tracking-wider">CSV</button>
+              <button onClick={exportJSON} className="text-slate-500 hover:text-white transition-colors text-xs uppercase font-bold tracking-wider">Backup</button>
+              <label className="text-slate-500 hover:text-white transition-colors text-xs uppercase font-bold tracking-wider cursor-pointer">
+                Restore <input type="file" className="hidden" accept=".json" onChange={handleImport} />
+              </label>
+            </div>
             <div className="flex flex-col items-end">
               <span className="text-xs text-slate-500 uppercase tracking-wider">Net Profit</span>
               <span className={`${stats.profit >= 0 ? 'text-emerald-400' : 'text-red-400'} font-mono`}>
@@ -139,7 +192,6 @@ export default function App() {
       </nav>
 
       <main className="max-w-5xl mx-auto px-4 py-8">
-        {/* Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-surface-card border border-surface-border p-4 rounded-xl">
             <p className="text-xs text-slate-500 uppercase font-bold">Active Inventory</p>
@@ -164,7 +216,6 @@ export default function App() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
-          {/* Form Section */}
           <div className="lg:col-span-1">
             <div className="bg-surface-card border border-surface-border rounded-xl p-6 sticky top-24">
               <h2 className="text-lg font-semibold text-white mb-5">{editingId ? 'Edit Part' : 'Add New Part'}</h2>
@@ -232,9 +283,8 @@ export default function App() {
             </div>
           </div>
 
-          {/* List Section */}
           <div className="lg:col-span-2 space-y-4">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col sm:flex-row gap-4 items-center justify-between mb-4">
               <div className="flex gap-1 bg-surface-card p-1 rounded-lg border border-surface-border">
                 {['all', 'available', 'sold'].map(f => (
                   <button
@@ -246,7 +296,25 @@ export default function App() {
                   </button>
                 ))}
               </div>
-              <span className="text-xs font-mono text-slate-500">{filteredParts.length} ITEMS</span>
+              <div className="flex gap-2 w-full sm:w-auto">
+                <input 
+                  type="text" 
+                  placeholder="Search..." 
+                  className="bg-surface-dark border border-surface-border rounded-lg px-3 py-1.5 text-sm text-white focus:border-accent-primary focus:outline-none w-full sm:w-40"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                />
+                <select 
+                  value={sort} 
+                  onChange={e => setSort(e.target.value)}
+                  className="bg-surface-dark border border-surface-border rounded-lg px-3 py-1.5 text-sm text-white focus:border-accent-primary focus:outline-none appearance-none"
+                >
+                  <option value="newest">Newest</option>
+                  <option value="oldest">Oldest</option>
+                  <option value="price-high">Price: High</option>
+                  <option value="price-low">Price: Low</option>
+                </select>
+              </div>
             </div>
 
             {filteredParts.length === 0 ? (
@@ -256,81 +324,128 @@ export default function App() {
             ) : (
               <div className="grid gap-3">
                 {filteredParts.map(part => (
-                  <div key={part.id} className={`group bg-surface-card border ${part.status === 'sold' ? 'border-surface-border opacity-75' : 'border-surface-border hover:border-accent-primary/50'} rounded-lg p-4 flex items-center justify-between transition-all`}>
+                  <div 
+                    key={part.id} 
+                    onClick={() => { setSelectedPart(part); setIsSelling(false); }}
+                    className={`group bg-surface-card border ${part.status === 'sold' ? 'border-surface-border opacity-60' : 'border-surface-border hover:border-accent-primary/50'} rounded-lg p-3 flex items-center justify-between transition-all cursor-pointer hover:bg-surface-border/30`}
+                  >
                     <div className="flex items-center gap-4">
-                      <div className={`h-10 w-10 rounded-lg flex items-center justify-center text-xs font-bold shadow-inner ${part.status === 'sold' ? 'bg-surface-dark text-slate-600' : 'bg-surface-dark text-accent-primary'}`}>
-                        {part.type.substring(0, 3)}
+                      <div className={`h-10 w-10 rounded-lg flex items-center justify-center shadow-inner ${part.status === 'sold' ? 'bg-surface-dark text-slate-600' : 'bg-surface-dark text-accent-primary'}`}>
+                        {(TYPE_ICONS[part.type] || TYPE_ICONS['Other'])({ className: "w-6 h-6" })}
                       </div>
                       <div>
-                        <h3 className={`font-medium ${part.status === 'sold' ? 'text-slate-400 line-through' : 'text-white'}`}>{part.name}</h3>
-                        <p className="text-xs text-slate-600 font-mono">
-                          {part.status === 'sold' ? `Sold: ${new Date(part.dateSold).toLocaleDateString()}` : `Added: ${new Date(part.dateAdded).toLocaleDateString()}`}
-                        </p>
-                        {part.notes && <p className="text-xs text-slate-500 mt-1 italic">"{part.notes}"</p>}
+                        <h3 className={`font-medium text-sm ${part.status === 'sold' ? 'text-slate-500 line-through' : 'text-white'}`}>{part.name}</h3>
+                        <p className="text-[10px] text-slate-600 font-mono uppercase tracking-wider">{part.type}</p>
                       </div>
                     </div>
                     
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        {part.status === 'sold' ? (
-                          <>
-                            <span className="block font-mono text-emerald-400 font-medium">+${(part.soldPrice - part.price).toFixed(2)}</span>
-                            <span className="block text-xs text-slate-600">Sold for ${part.soldPrice}</span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="block font-mono text-white font-medium">${part.price?.toFixed(2)}</span>
-                            <span className="block text-xs text-slate-600">Cost</span>
-                          </>
-                        )}
-                      </div>
-
-                      {part.status !== 'sold' && (
-                        <button
-                          onClick={() => setSellModal(part.id)}
-                          className="bg-accent-primary/10 hover:bg-accent-primary/20 text-accent-primary text-xs font-bold px-3 py-1.5 rounded border border-accent-primary/20 transition-colors"
-                        >
-                          SELL
-                        </button>
+                    <div className="text-right">
+                      {part.status === 'sold' ? (
+                        <span className="font-mono text-emerald-500/80 text-sm font-bold">SOLD</span>
+                      ) : (
+                        <span className="font-mono text-white text-sm font-medium">${part.price?.toFixed(2)}</span>
                       )}
-
-                      <div className="flex gap-1">
-                        <button onClick={() => startEdit(part)} className="text-slate-600 hover:text-accent-primary transition-colors p-2 hover:bg-accent-primary/10 rounded-md opacity-0 group-hover:opacity-100 focus:opacity-100" title="Edit">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
-                        </button>
-                        <button
-                          onClick={() => handleDelete(part.id)}
-                          className="text-slate-600 hover:text-red-400 transition-colors p-2 hover:bg-red-500/10 rounded-md opacity-0 group-hover:opacity-100 focus:opacity-100"
-                          title="Delete"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                        </button>
-                      </div>
                     </div>
-
-                    {/* Inline Sell Modal */}
-                    {sellModal === part.id && (
-                      <div className="absolute right-2 top-1/2 -translate-y-1/2 bg-surface-dark border border-surface-border shadow-2xl shadow-black rounded-lg p-2 z-20 animate-in fade-in slide-in-from-right-4 duration-200">
-                        <form onSubmit={handleSell} className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-accent-primary whitespace-nowrap pl-2">SOLD FOR $</span>
-                          <input 
-                            autoFocus
-                            type="number" 
-                            className="bg-surface-card border border-surface-border rounded px-2 py-1 text-white w-24 text-sm focus:outline-none focus:border-accent-primary"
-                            value={sellPrice}
-                            onChange={e => setSellPrice(e.target.value)}
-                          />
-                          <button type="submit" className="bg-accent-primary hover:bg-blue-600 text-white text-xs font-bold px-3 py-1.5 rounded transition-colors">✓</button>
-                          <button type="button" onClick={() => setSellModal(null)} className="text-slate-500 hover:text-white text-xs font-bold px-2 py-1.5">✕</button>
-                        </form>
-                      </div>
-                    )}
                   </div>
                 ))}
               </div>
             )}
           </div>
         </div>
+
+        {selectedPart && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSelectedPart(null)}>
+            <div className="bg-surface-card border border-surface-border rounded-xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden" onClick={e => e.stopPropagation()}>
+              
+              <div className="p-6 border-b border-surface-border flex items-start justify-between bg-surface-dark/50">
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-xl bg-surface-dark border border-surface-border flex items-center justify-center text-accent-primary">
+                    {(TYPE_ICONS[selectedPart.type] || TYPE_ICONS['Other'])({ className: "w-8 h-8" })}
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-white">{selectedPart.name}</h2>
+                    <span className="text-xs font-mono text-slate-500 uppercase tracking-wider">{selectedPart.type}</span>
+                  </div>
+                </div>
+                <button onClick={() => setSelectedPart(null)} className="text-slate-500 hover:text-white">✕</button>
+              </div>
+
+              <div className="p-6 space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-surface-dark p-3 rounded-lg border border-surface-border">
+                    <p className="text-xs text-slate-500 uppercase font-bold">Buy Price</p>
+                    <p className="text-lg font-mono text-white">${selectedPart.price.toFixed(2)}</p>
+                  </div>
+                  <div className="bg-surface-dark p-3 rounded-lg border border-surface-border">
+                    <p className="text-xs text-slate-500 uppercase font-bold">Status</p>
+                    <p className={`text-lg font-mono font-bold ${selectedPart.status === 'sold' ? 'text-emerald-400' : 'text-accent-primary'}`}>
+                      {selectedPart.status.toUpperCase()}
+                    </p>
+                  </div>
+                </div>
+
+                {selectedPart.status === 'sold' && (
+                  <div className="bg-emerald-500/10 p-4 rounded-lg border border-emerald-500/20">
+                    <div className="flex justify-between items-center">
+                      <span className="text-emerald-400 font-bold">Sold For</span>
+                      <span className="text-xl font-mono text-white">${selectedPart.soldPrice?.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between items-center mt-2 pt-2 border-t border-emerald-500/20">
+                      <span className="text-xs text-emerald-400/70 uppercase font-bold">Profit</span>
+                      <span className="font-mono text-emerald-400">+${(selectedPart.soldPrice - selectedPart.price).toFixed(2)}</span>
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <p className="text-xs text-slate-500 uppercase font-bold mb-2">Notes</p>
+                  <div className="bg-surface-dark p-3 rounded-lg border border-surface-border min-h-[80px] text-sm text-slate-300">
+                    {selectedPart.notes || <span className="text-slate-600 italic">No notes added.</span>}
+                  </div>
+                </div>
+
+                <div className="text-xs text-slate-600 font-mono flex justify-between">
+                  <span>Added: {new Date(selectedPart.dateAdded).toLocaleDateString()}</span>
+                  {selectedPart.dateSold && <span>Sold: {new Date(selectedPart.dateSold).toLocaleDateString()}</span>}
+                </div>
+              </div>
+
+              <div className="p-4 bg-surface-dark/50 border-t border-surface-border flex gap-3">
+                {selectedPart.status !== 'sold' && !isSelling && (
+                  <button onClick={() => setIsSelling(true)} className="flex-1 bg-accent-primary hover:bg-blue-600 text-white font-bold py-2.5 rounded-lg transition-colors">
+                    Sell Item
+                  </button>
+                )}
+
+                {isSelling && (
+                  <form onSubmit={handleSell} className="flex-1 flex gap-2 animate-in slide-in-from-bottom-2">
+                    <input 
+                      autoFocus
+                      type="number" 
+                      placeholder="Sale Price ($)"
+                      className="flex-1 bg-surface-dark border border-surface-border rounded-lg px-3 text-white focus:border-accent-primary focus:outline-none"
+                      value={sellPrice}
+                      onChange={e => setSellPrice(e.target.value)}
+                    />
+                    <button type="submit" className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-4 rounded-lg">Confirm</button>
+                    <button type="button" onClick={() => setIsSelling(false)} className="bg-surface-border hover:bg-zinc-700 text-white font-bold px-3 rounded-lg">✕</button>
+                  </form>
+                )}
+
+                {!isSelling && (
+                  <>
+                    <button onClick={() => startEdit(selectedPart)} className="px-4 py-2.5 bg-surface-dark border border-surface-border hover:bg-surface-border text-white rounded-lg font-bold transition-colors">
+                      Edit
+                    </button>
+                    <button onClick={() => handleDelete(selectedPart.id)} className="px-4 py-2.5 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 text-red-400 rounded-lg font-bold transition-colors">
+                      Delete
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
